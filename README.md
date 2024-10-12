@@ -1,7 +1,7 @@
 # ParaSpell XCM SDK🪄 starter template
 
-Get started with the [XCM SDK]https://github.com/paraspell/xcm-tools/tree/main/packages/sdk) by using this template.
-If you would like to expand functionality by utilizing other XCM SDK functions feel free to check out [official XCM SDK docs](https://paraspell.github.io/docs/sdk/getting-started.html).
+- Get started with the [XCM SDK](https://github.com/paraspell/xcm-tools/tree/main/packages/sdk) by using this template.
+- If you would like to expand functionality by utilizing other XCM SDK functions feel free to check out [official XCM SDK docs](https://paraspell.github.io/docs/sdk/getting-started.html).
 
 ## Usage
 
