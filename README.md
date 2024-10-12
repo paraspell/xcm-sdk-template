@@ -1,12 +1,12 @@
-# xcm-sdk-template
+# ParaSpell XCM SDK🪄 starter template
 
-XCM SDK starter template for your dApp
-
-Get started with the XCM SDK by using this template.
+Get started with the [XCM SDK]https://github.com/paraspell/xcm-tools/tree/main/packages/sdk) by using this template.
+If you would like to expand functionality by utilizing other XCM SDK functions feel free to check out [official XCM SDK docs](https://paraspell.github.io/docs/sdk/getting-started.html).
 
 ## Usage
 
-1. Clone this repository
+1. Click on use this template
+2. Clone your freshly created project
 2. Run `pnpm install`
 3. Run `pnpm dev`
 
