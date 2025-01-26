@@ -1,114 +1,80 @@
 import { useState, FC } from "react";
 import TransferForm from "./XcmTransferForm";
-import { Builder, isRelayChain, TNode } from "@paraspell/sdk";
-import {
-  web3Accounts,
-  web3Enable,
-  web3FromAddress,
-} from "@polkadot/extension-dapp";
+import { Builder, isForeignAsset } from "@paraspell/sdk";
 import type { FormValues } from "./XcmTransferForm";
-import type { Signer } from "@polkadot/api/types";
-import type { InjectedAccountWithMeta } from "@polkadot/extension-inject/types";
+import {
+  connectInjectedExtension,
+  getInjectedExtensions,
+  InjectedExtension,
+  InjectedPolkadotAccount,
+  PolkadotSigner,
+} from "polkadot-api/pjs-signer";
 
 const XcmTransfer: FC = () => {
   const [errorVisible, setErrorVisible] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(false);
-  const [accounts, setAccounts] = useState<InjectedAccountWithMeta[]>([]);
+  const [extensions, setExtensions] = useState<string[]>([]);
+  const [selectedExtension, setSelectedExtension] =
+    useState<InjectedExtension | null>();
+  const [accounts, setAccounts] = useState<InjectedPolkadotAccount[]>([]);
   const [selectedAccount, setSelectedAccount] =
-    useState<InjectedAccountWithMeta>();
+    useState<InjectedPolkadotAccount>();
 
   const initAccounts = async () => {
-    // Enable the wallet extension
-    const allInjected = await web3Enable("ParaSpellXcmSdk");
+    // Get extensions
+    const extensions = getInjectedExtensions();
 
-    if (!allInjected) {
+    if (extensions.length === 0) {
       alert("No wallet extension found, install it to connect");
       throw Error("No Wallet Extension Found!");
     }
 
-    // Get all accounts
-    const allAccounts = await web3Accounts();
-
-    if (allAccounts.length === 0) {
-      alert("No accounts found, create or import an account to connect");
-      throw Error("No Accounts Found!");
-    }
-
-    // Save accounts to state
-    setAccounts(allAccounts);
-
-    // Set the first account as selected
-    setSelectedAccount(allAccounts[0]);
+    // Save extensions to state
+    setExtensions(extensions);
   };
 
   // Determine if id or symbol should be passed to the SDK
-  const determineCurrency = ({ currency }: FormValues) => {
+  const determineCurrency = ({ currency, amount }: FormValues) => {
     if (!currency) throw new Error("Currency is required");
     // If the currency has an assetId, use it, otherwise use the symbol
-    return currency.assetId
-      ? { id: currency.assetId }
-      : { symbol: currency.symbol || "" };
-  };
-
-  // Create a transfer transaction using the ParaSpell SDK
-  const createTransferTx = (values: FormValues) => {
-    const { from, to, amount, address } = values;
-    if (!isRelayChain(from) && !isRelayChain(to)) {
-      // If both nodes are not relay chains, create a ParaToPara transfer
-      return Builder()
-        .from(from as TNode)
-        .to(to as TNode)
-        .currency(determineCurrency(values))
-        .amount(amount)
-        .address(address)
-        .build();
-    } else if (isRelayChain(to)) {
-      // If the destination node is a relay chain, create a ParaToRelay transfer
-      return Builder()
-        .from(from as TNode)
-        .amount(amount)
-        .address(address)
-        .build();
-    } else {
-      // If the origin node is a relay chain, create a RelayToPara transfer
-      return Builder()
-        .to(to as TNode)
-        .amount(amount)
-        .address(address)
-        .build();
-    }
+    return isForeignAsset(currency) && currency.assetId
+      ? { id: currency.assetId, amount }
+      : { symbol: currency.symbol || "", amount };
   };
 
   const submitUsingSdk = async (
     formValues: FormValues,
-    injectorAddress: string,
-    signer: Signer
+    signer: PolkadotSigner
   ) => {
-    // Create the transfer transaction
-    const tx = await createTransferTx(formValues);
+    const { from, to, address } = formValues;
+
+    // Create a transfer transaction using the ParaSpell SDK
+    const tx = await Builder()
+      .from(from)
+      .to(to)
+      .currency(determineCurrency(formValues))
+      .address(address)
+      .build();
+
     // Sign and submit the transaction
-    await tx.signAndSend(injectorAddress, { signer });
+    await tx.signAndSubmit(signer);
   };
 
   const onSubmit = async (formValues: FormValues) => {
-    if (!selectedAccount) {
+    if (!selectedAccount || !selectedExtension) {
       alert("No account selected, connect wallet first");
       return;
     }
 
     setLoading(true);
 
-    // Get the injector for the selected account
-    const injector = await web3FromAddress(selectedAccount.address);
+    // Get the signer for the selected account
+    const signer = selectedAccount.polkadotSigner;
 
     try {
       // Create the transaction using the SDK and submit it
-      await submitUsingSdk(
-        formValues,
-        selectedAccount.address,
-        injector.signer
-      );
+      await submitUsingSdk(formValues, signer);
       alert("Transaction was successful!");
     } catch (e) {
       // Handle errors
@@ -119,13 +85,42 @@ const XcmTransfer: FC = () => {
     }
   };
 
+  const onExtensionSelect = async (name: string) => {
+    const injectedExtension = await connectInjectedExtension(name);
+    setSelectedExtension(injectedExtension);
+
+    const accounts = injectedExtension.getAccounts();
+    setAccounts(accounts);
+  };
+
   return (
     <div>
       <div className="formHeader">
-        {accounts.length > 0 ? (
+        {extensions.length > 0 ? (
+          <div>
+            <h4>Select extension:</h4>
+            <select
+              defaultValue=""
+              value={selectedExtension?.name}
+              onChange={(e) => onExtensionSelect(e.target.value)}
+            >
+              <option disabled value="">
+                -- select an option --
+              </option>
+              {extensions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <button onClick={initAccounts}>Connect Wallet</button>
+        )}
+        {accounts.length > 0 && (
           <div>
             <div>
-              <h4>Connected to:</h4>
+              <h4>Select account:</h4>
             </div>
             <select
               style={{}}
@@ -136,15 +131,13 @@ const XcmTransfer: FC = () => {
                 )
               }
             >
-              {accounts.map((acc) => (
-                <option key={acc.address} value={acc.address}>
-                  {acc.meta.name} - {acc.address}
+              {accounts.map(({ name, address }) => (
+                <option key={address} value={address}>
+                  {name} - {address}
                 </option>
               ))}
             </select>
           </div>
-        ) : (
-          <button onClick={initAccounts}>Connect Wallet</button>
         )}
       </div>
       <TransferForm onSubmit={onSubmit} loading={loading} />
