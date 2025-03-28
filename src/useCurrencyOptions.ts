@@ -19,7 +19,9 @@ const useCurrencyOptions = (
     () =>
       supportedAssets.reduce((map: Record<string, TAsset>, asset) => {
         const key = `${asset.symbol ?? "NO_SYMBOL"}-${
-          asset.assetId ?? "NO_ID"
+          ("assetId" in asset
+            ? asset.assetId
+            : JSON.stringify(asset?.multiLocation)) ?? "NO_ID"
         }`;
         map[key] = asset;
         return map;
@@ -33,7 +35,9 @@ const useCurrencyOptions = (
       Object.keys(currencyMap).map((key) => ({
         value: key,
         label: `${currencyMap[key].symbol} - ${
-          currencyMap[key].assetId ?? "Native"
+          ("assetId" in currencyMap[key]
+            ? currencyMap[key].assetId
+            : "Multi-Location") ?? "Native"
         }`,
       })),
     [currencyMap]
