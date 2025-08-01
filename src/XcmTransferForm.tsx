@@ -60,7 +60,7 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
   useEffect(() => {
     // Set default currency option if available
     if (currencyOptions.length > 0) {
-      setCurrencyOptionId(currencyOptions[0].value);
+      setCurrencyOptionId(currencyOptions[currencyOptions.length - 1].value);
     }
   }, [currencyOptions]);
 
