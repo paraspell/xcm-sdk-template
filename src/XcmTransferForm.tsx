@@ -2,20 +2,13 @@ import { useState, useEffect, FormEvent, FC } from "react";
 import useCurrencyOptions from "./useCurrencyOptions";
 import {
   CHAINS,
+  EXCHANGE_CHAINS,
   SUBSTRATE_CHAINS,
-  TAssetInfo,
   TChain,
+  TExchangeChain,
   TSubstrateChain,
 } from "@paraspell/sdk";
-
-export type FormValues = {
-  from: TSubstrateChain;
-  to: TChain;
-  currencyOptionId: string;
-  address: string;
-  amount: string;
-  currency?: TAssetInfo;
-};
+import type { FormValues } from "./types";
 
 type Props = {
   onSubmit: (values: FormValues) => void;
@@ -27,16 +20,19 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
   const [originChain, setOriginChain] = useState<TSubstrateChain>("Astar");
   const [destinationChain, setDestinationChain] = useState<TChain>("Hydration");
   const [currencyOptionId, setCurrencyOptionId] = useState("");
-  const [address, setAddress] = useState(
-    "5F5586mfsnM6durWRLptYt3jSUs55KEmahdodQ5tQMr9iY96"
+  const [currencyToOptionId, setCurrencyToOptionId] = useState("");
+  const [swapEnabled, setSwapEnabled] = useState(false);
+  const [exchange, setExchange] = useState<TExchangeChain | undefined>(
+    undefined,
   );
-  const [amount, setAmount] = useState("10000000000000000000");
+  const [recipient, setRecipient] = useState(
+    "5F5586mfsnM6durWRLptYt3jSUs55KEmahdodQ5tQMr9iY96",
+  );
+  const [amount, setAmount] = useState("5");
 
   // Get currency options based on the selected chains
-  const { currencyOptions, currencyMap } = useCurrencyOptions(
-    originChain,
-    destinationChain
-  );
+  const { currencyOptions, currencyMap, currencyToOptions, currencyToMap } =
+    useCurrencyOptions(originChain, destinationChain, swapEnabled, exchange);
 
   // Handle form submission
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -45,10 +41,13 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
       from: originChain,
       to: destinationChain,
       currencyOptionId,
-      address,
+      recipient,
       amount,
       // Get the selected currency based on the currency option id
       currency: currencyMap[currencyOptionId],
+      swapEnabled,
+      currencyTo: swapEnabled ? currencyToMap[currencyToOptionId] : undefined,
+      exchange,
     };
 
     // Pass the submitted form values to the parent component
@@ -62,6 +61,16 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
       setCurrencyOptionId(currencyOptions[currencyOptions.length - 1].value);
     }
   }, [currencyOptions]);
+
+  useEffect(() => {
+    // Set default destination currency option if available
+    if (currencyToOptions.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrencyToOptionId(
+        currencyToOptions[currencyToOptions.length - 1].value,
+      );
+    }
+  }, [currencyToOptions]);
 
   return (
     <form onSubmit={handleSubmit}>
@@ -114,8 +123,8 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
         Recipient address
         <input
           type="text"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
           required
         />
       </label>
@@ -129,6 +138,54 @@ const TransferForm: FC<Props> = ({ onSubmit, loading }) => {
           required
         />
       </label>
+
+      <button
+        type="button"
+        className="secondary"
+        onClick={() => setSwapEnabled((prev) => !prev)}
+      >
+        {swapEnabled ? "- Remove Swap" : "+ Add Swap"}
+      </button>
+
+      {swapEnabled && (
+        <>
+          <label>
+            Exchange
+            <select
+              value={exchange ?? ""}
+              onChange={(e) =>
+                setExchange(
+                  e.target.value
+                    ? (e.target.value as TExchangeChain)
+                    : undefined,
+                )
+              }
+            >
+              <option value="">Auto</option>
+              {EXCHANGE_CHAINS.map((chain) => (
+                <option key={chain} value={chain}>
+                  {chain}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Currency To
+            <select
+              value={currencyToOptionId}
+              onChange={(e) => setCurrencyToOptionId(e.target.value)}
+              required
+            >
+              {currencyToOptions.map((currency) => (
+                <option key={currency.value} value={currency.value}>
+                  {currency.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
 
       <button type="submit" disabled={loading}>
         {loading ? "Submitting..." : "Submit transaction"}

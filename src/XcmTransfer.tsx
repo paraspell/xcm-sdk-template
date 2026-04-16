@@ -1,7 +1,6 @@
 import { useState, FC } from "react";
 import TransferForm from "./XcmTransferForm";
-import { Builder, isForeignAsset } from "@paraspell/sdk";
-import type { FormValues } from "./XcmTransferForm";
+import type { FormValues } from "./types";
 import {
   connectInjectedExtension,
   getInjectedExtensions,
@@ -9,6 +8,8 @@ import {
   InjectedPolkadotAccount,
   PolkadotSigner,
 } from "polkadot-api/pjs-signer";
+import { Builder } from "@paraspell/sdk";
+import { submitTransaction } from "./utils";
 
 const XcmTransfer: FC = () => {
   const [errorVisible, setErrorVisible] = useState(false);
@@ -34,31 +35,50 @@ const XcmTransfer: FC = () => {
     setExtensions(extensions);
   };
 
-  // Determine if id or symbol should be passed to the SDK
-  const determineCurrency = ({ currency, amount }: FormValues) => {
-    if (!currency) throw new Error("Currency is required");
-    // If the currency has an assetId, use it, otherwise use the symbol
-    return isForeignAsset(currency) && currency.assetId
-      ? { id: currency.assetId, amount }
-      : { symbol: currency.symbol || "", amount };
-  };
-
   const submitUsingSdk = async (
     formValues: FormValues,
-    signer: PolkadotSigner
+    signer: PolkadotSigner,
   ) => {
-    const { from, to, address } = formValues;
+    const { from, to, recipient, amount, swapEnabled, currencyTo, exchange } =
+      formValues;
 
-    // Create a transfer transaction using the ParaSpell SDK
-    const tx = await Builder()
-      .from(from)
-      .to(to)
-      .currency(determineCurrency(formValues))
-      .address(address)
-      .build();
+    if (!selectedAccount) {
+      alert("No account selected, connect wallet first");
+      return;
+    }
 
-    // Sign and submit the transaction
-    await tx.signAndSubmit(signer);
+    if (swapEnabled) {
+      // Create a swap transfer transaction
+      const builder = Builder()
+        .from(from)
+        .to(to)
+        .currency({ location: formValues.currency!.location, amount })
+        .recipient(recipient)
+        .swap({
+          currencyTo: { location: currencyTo!.location },
+          ...(exchange ? { exchange: [exchange] } : {}),
+        })
+        .sender(selectedAccount?.address);
+
+      const txs = await builder.buildAll();
+
+      // buildAll returns an array of transaction contexts (1 or 2 click scenarios)
+      for (const txContext of txs) {
+        await submitTransaction(txContext.tx, signer);
+      }
+    } else {
+      // Create a regular transfer transaction using the ParaSpell SDK
+      const tx = await Builder()
+        .from(from)
+        .to(to)
+        .currency({ location: formValues.currency!.location, amount })
+        .recipient(recipient)
+        .sender(selectedAccount?.address)
+        .build();
+
+      // Sign and submit the transaction
+      await submitTransaction(tx, signer);
+    }
   };
 
   const onSubmit = async (formValues: FormValues) => {
@@ -130,7 +150,7 @@ const XcmTransfer: FC = () => {
               value={selectedAccount?.address}
               onChange={(e) =>
                 setSelectedAccount(
-                  accounts.find((acc) => acc.address === e.target.value)
+                  accounts.find((acc) => acc.address === e.target.value),
                 )
               }
             >
