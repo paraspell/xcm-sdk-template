@@ -1,6 +1,8 @@
 import "./App.css";
 import XcmTransfer from "./XcmTransfer";
 
+import "@paraspell/swap";
+
 const App = () => (
   <>
     <div className="header">
